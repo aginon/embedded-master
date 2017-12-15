@@ -64,6 +64,8 @@
 #define PDM_OUT_GPIO_Port GPIOC
 #define B1_Pin GPIO_PIN_0
 #define B1_GPIO_Port GPIOA
+#define RANGE_TRIG_Pin GPIO_PIN_1
+#define RANGE_TRIG_GPIO_Port GPIOB
 #define BOOT1_Pin GPIO_PIN_2
 #define BOOT1_GPIO_Port GPIOB
 #define LD4_Pin GPIO_PIN_12
@@ -90,6 +92,12 @@
 #define OTG_FS_OverCurrent_GPIO_Port GPIOD
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
+#define RANGE_ECHO_RS_Pin GPIO_PIN_4
+#define RANGE_ECHO_RS_GPIO_Port GPIOB
+#define RANGE_ECHO_RS_EXTI_IRQn EXTI4_IRQn
+#define RANGE_ECHO_FL_Pin GPIO_PIN_5
+#define RANGE_ECHO_FL_GPIO_Port GPIOB
+#define RANGE_ECHO_FL_EXTI_IRQn EXTI9_5_IRQn
 #define Audio_SDA_Pin GPIO_PIN_9
 #define Audio_SDA_GPIO_Port GPIOB
 #define MEMS_INT2_Pin GPIO_PIN_1

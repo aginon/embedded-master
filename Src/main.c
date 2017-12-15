@@ -44,6 +44,8 @@
 #include <string.h>
 #include <agn_logger.h>
 #include <agn_errno.h>
+#include <agn_micros.h>
+#include <agn_range_finder.h>
 
 /* USER CODE END Includes */
 
@@ -97,9 +99,10 @@ void poll() {
 }
 
 
-
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	HAL_GPIO_WritePin(GPIOD, LD3_Pin, 1);
 	if (htim->Instance == TIM7) {
+		// TIM 7 set to 0.1 Hz
 		poll();
 	} else {
 		UNUSED(htim);
@@ -114,7 +117,7 @@ int main(void)
   /* USER CODE BEGIN 1 */
   HAL_GPIO_WritePin(GPIOD, LD4_Pin, 0); // LD4 (Green) is working indicator
   HAL_GPIO_WritePin(GPIOD, LD5_Pin, 0); // LD5 (Red) is error indicator
-  HAL_GPIO_WritePin(GPIOD, LD6_Pin, 1);
+  HAL_GPIO_WritePin(GPIOD, LD6_Pin, 1); // LD6 (Blue)
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -124,7 +127,10 @@ int main(void)
 
   /* USER CODE BEGIN Init */
   resetErrno();
+
+  // Initialize Logger Huart
   AGN_INITIALIZE(&huart2);
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -147,6 +153,7 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim7);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -158,12 +165,14 @@ int main(void)
   /* USER CODE BEGIN 3 */
 	  //const char * d = "hello\r\n";
 	  //HAL_UART_Transmit(&huart2, d, strlen((char * )d), 1000);
-	  AGN_LOG_INFO("Logger is working.");
+	  //AGN_LOG_INFO("Logger is working.");
 
-	  if (HAL_GetTick() > 10000) {
-		  setErrno(0);
-	  }
-	  HAL_Delay(100);
+	  char str[100];
+	  AGN_RANGE_TRIGGER();
+	  sprintf(str, "AGN_RANGE = %lu", AGN_RANGE_GET());
+	  AGN_LOG_INFO(str);
+
+	  HAL_Delay(250);
   }
   /* USER CODE END 3 */
 
@@ -322,9 +331,9 @@ static void MX_TIM6_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig;
 
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 1;
+  htim6.Init.Prescaler = 0;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 2000;
+  htim6.Init.Period = 75;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -433,6 +442,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(OTG_FS_PowerSwitchOn_GPIO_Port, OTG_FS_PowerSwitchOn_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(RANGE_TRIG_GPIO_Port, RANGE_TRIG_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, LD4_Pin|LD3_Pin|LD5_Pin|LD6_Pin 
                           |Audio_RST_Pin, GPIO_PIN_RESET);
 
@@ -463,6 +475,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : RANGE_TRIG_Pin */
+  GPIO_InitStruct.Pin = RANGE_TRIG_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(RANGE_TRIG_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BOOT1_Pin */
   GPIO_InitStruct.Pin = BOOT1_Pin;
@@ -501,11 +520,30 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(OTG_FS_OverCurrent_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : RANGE_ECHO_RS_Pin */
+  GPIO_InitStruct.Pin = RANGE_ECHO_RS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(RANGE_ECHO_RS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : RANGE_ECHO_FL_Pin */
+  GPIO_InitStruct.Pin = RANGE_ECHO_FL_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(RANGE_ECHO_FL_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : MEMS_INT2_Pin */
   GPIO_InitStruct.Pin = MEMS_INT2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MEMS_INT2_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 

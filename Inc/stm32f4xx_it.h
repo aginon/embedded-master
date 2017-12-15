@@ -48,6 +48,8 @@
 /* Exported functions ------------------------------------------------------- */
 
 void SysTick_Handler(void);
+void EXTI4_IRQHandler(void);
+void EXTI9_5_IRQHandler(void);
 void TIM7_IRQHandler(void);
 
 #ifdef __cplusplus
