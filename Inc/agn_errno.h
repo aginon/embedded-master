@@ -13,7 +13,8 @@
 
 #define AGN_ERRNO_UNKNOWN 			1
 #define AGN_ERRNO_RESET_ERRNO 		2
-#define AGN_ERRNO_LOGGING_FAILED 	3
+#define AGN_ERRNO_LOGGING_ERROR 	3
+#define AGN_ERRNO_LOGGING_TIMEOUT	4
 
 void resetErrno();
 void setErrno(int errCode);

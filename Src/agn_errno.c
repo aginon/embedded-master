@@ -13,6 +13,7 @@ int AGN_ERRNO;
 
 void resetErrno() {
 	AGN_ERRNO = 0;
+	HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
 }
 
 void setErrno(int errCode) {
@@ -24,7 +25,7 @@ void setErrno(int errCode) {
 	}
 
 	// Also Set Red LED Pin to HIGH (Indicating Error)
-	HAL_GPIO_WritePin(GPIOD, LD5_Pin, 1);
+	HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
 }
 
 int getErrno() {

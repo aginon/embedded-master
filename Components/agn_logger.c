@@ -26,7 +26,10 @@ void _AGN_LOG_FORMAT(const char * message, const char * level, const char * file
 	// Time Str //
 	int len = sprintf(buff, "T+%ld (%s:%d) [%s] %s\r\n", HAL_GetTick(), file, line, level, message);
 	//int len = 4;
-	if (HAL_UART_Transmit(_logger_huart, (uint8_t *) buff, len, AGN_LOG_TIMEOUT_MS) != HAL_OK) {
-		setErrno(AGN_ERRNO_LOGGING_FAILED);
+	HAL_StatusTypeDef transmitStatus = HAL_UART_Transmit(_logger_huart, (uint8_t *) buff, len, AGN_LOG_TIMEOUT_MS);
+	if (transmitStatus == HAL_ERROR) {
+		setErrno(AGN_ERRNO_LOGGING_ERROR);
+	} else if (transmitStatus == HAL_TIMEOUT) {
+		setErrno(AGN_ERRNO_LOGGING_TIMEOUT);
 	}
 }
