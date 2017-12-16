@@ -43,6 +43,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 
+#include <agn_buzzer.h>
 #include <agn_errno.h>
 #include <agn_gateway.h>
 #include <agn_logger.h>
@@ -81,8 +82,8 @@ static void MX_TIM6_Init(void);
 static void MX_TIM7_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_DAC_Init(void);
 static void MX_SPI2_Init(void);
+static void MX_DAC_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -92,8 +93,7 @@ static void MX_SPI2_Init(void);
 /* USER CODE BEGIN 0 */
 
 // run this code every x seconds
-void poll() {
-	HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
+void AGN_CHECK_ERRORS() {
 	if (getErrno() != 0) {
 		char s[20];
 		sprintf(s, "Error Code = %d", getErrno());
@@ -101,12 +101,19 @@ void poll() {
 	}
 }
 
+int buzzer_state = 0;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	HAL_GPIO_TogglePin(GPIOD, LD3_Pin);
 	if (htim->Instance == TIM7) {
 		// TIM 7 set to 0.1 Hz
-		poll();
+		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
+		AGN_CHECK_ERRORS();
+
+		AGN_BUZZER_SET_WAVEFORM(AGN_WAVEFORM_SQ);
+		AGN_BUZZER_SET_FREQ(AGN_TONE_BB4 * 2);
+	} else if (htim->Instance == TIM6){
+		// TIM 6 set to 100kHz
+		AGN_BUZZER_TICK();
 	} else {
 		UNUSED(htim);
 	}
@@ -144,6 +151,7 @@ int main(void)
   // Initialize Logger Huart
   AGN_LOG_INITIALIZE(&huart2);
   AGN_GATEWAY_INITIALIZE(&huart3);
+  AGN_BUZZER_INITIALIZE(&hdac);
 
   /* USER CODE END Init */
 
@@ -162,12 +170,17 @@ int main(void)
   MX_TIM7_Init();
   MX_DCMI_Init();
   MX_I2C1_Init();
-  MX_DAC_Init();
   MX_SPI2_Init();
+  MX_DAC_Init();
 
   /* USER CODE BEGIN 2 */
+
+  // Start Timer Interrupts
+  // TODO Check for errors at this stage
+  HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim7);
 
+  HAL_DAC_Start(&hdac, DAC_CHANNEL_2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -189,8 +202,6 @@ int main(void)
 	  packet.hex2  = 0x3;
 
 	  AGN_GATEWAY_SEND_PACKET(&packet);
-
-
 	  // Print Range Information
 	  //char str[100];
 	  //sprintf(str, "AGN_RANGE = %lu", AGN_RANGE_GET());
@@ -276,6 +287,7 @@ static void MX_DAC_Init(void)
 
     /**DAC channel OUT2 config 
     */
+
   sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_2) != HAL_OK)
@@ -355,7 +367,7 @@ static void MX_TIM6_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig;
 
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 0;
+  htim6.Init.Prescaler = 9;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 75;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
@@ -460,7 +472,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CS_I2C_SPI_GPIO_Port, CS_I2C_SPI_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|BUZZER_IO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(OTG_FS_PowerSwitchOn_GPIO_Port, OTG_FS_PowerSwitchOn_Pin, GPIO_PIN_SET);
@@ -472,12 +484,12 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOD, LD4_Pin|LD3_Pin|LD5_Pin|LD6_Pin 
                           |Audio_RST_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : CS_I2C_SPI_Pin */
-  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin;
+  /*Configure GPIO pins : CS_I2C_SPI_Pin BUZZER_IO_Pin */
+  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|BUZZER_IO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CS_I2C_SPI_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pin : OTG_FS_PowerSwitchOn_Pin */
   GPIO_InitStruct.Pin = OTG_FS_PowerSwitchOn_Pin;
