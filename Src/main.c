@@ -100,12 +100,22 @@ void poll() {
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	HAL_GPIO_WritePin(GPIOD, LD3_Pin, 1);
+	HAL_GPIO_TogglePin(GPIOD, LD3_Pin);
 	if (htim->Instance == TIM7) {
 		// TIM 7 set to 0.1 Hz
 		poll();
 	} else {
 		UNUSED(htim);
+	}
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if (GPIO_Pin & RANGE_ECHO_RS_Pin) {
+		AGN_RANGE_RISING();
+	}
+	if (GPIO_Pin & RANGE_ECHO_FL_Pin) {
+		AGN_RANGE_FALLING();
 	}
 }
 

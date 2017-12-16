@@ -45,9 +45,6 @@ void AGN_RANGE_FALLING() {
 		// Low Pass Filter
 		_AGN_RANGE = (newValue * 7 + _AGN_RANGE) / 8;
 	}
-	char str[100];
-	sprintf(str, "_AGN_RANGE = %lu", _AGN_RANGE);
-	AGN_LOG_DEBUG(str);
 }
 
 void AGN_RANGE_TRIGGER() {
