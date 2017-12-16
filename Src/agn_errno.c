@@ -7,9 +7,8 @@
 
 #include <agn_errno.h>
 
-
 // Error indicator
-int AGN_ERRNO;
+static int AGN_ERRNO;
 
 void resetErrno() {
 	AGN_ERRNO = 0;

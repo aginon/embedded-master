@@ -15,7 +15,7 @@
 
 #define AGN_LOG_TIMEOUT_MS 1000
 
-UART_HandleTypeDef * _logger_huart;
+static UART_HandleTypeDef * _logger_huart;
 
 void AGN_INITIALIZE(UART_HandleTypeDef * logger_huart) {
 	_logger_huart = logger_huart;

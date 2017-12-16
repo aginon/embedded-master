@@ -19,10 +19,10 @@
 #include "agn_logger.h"
 
 // Calibration Factors (Y = ax + b)
-uint32_t agn_range_a = 100, agn_range_b = 100;
+static uint32_t agn_range_a = 100, agn_range_b = 100;
 
-uint32_t _AGN_RANGE = 0;
-uint32_t _LAST_EDGE_TIME = 0;
+static uint32_t _AGN_RANGE = 0;
+static uint32_t _LAST_EDGE_TIME = 0;
 
 void AGN_RANGE_SET_A(uint32_t a) {
 	agn_range_a = a;
