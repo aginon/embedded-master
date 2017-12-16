@@ -8,6 +8,13 @@
 #ifndef AGN_GATEWAY_H_
 #define AGN_GATEWAY_H_
 
+#include "agn_packet.h"
 
+void AGN_GATEWAY_INITIALIZE(UART_HandleTypeDef * gateway_huart);
 
+void AGN_GATEWAY_SEND_BYTES(uint8_t* bytes, uint16_t size);
+void AGN_GATEWAY_SEND_PACKET(struct AGN_PACKET* packet);
+
+void AGN_GATEWAY_RECEIVE_BYTES(uint8_t* bytes, uint8_t size);
+void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet);
 #endif /* AGN_GATEWAY_H_ */

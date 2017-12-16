@@ -42,9 +42,12 @@
 
 /* USER CODE BEGIN Includes */
 #include <string.h>
-#include <agn_logger.h>
+
 #include <agn_errno.h>
+#include <agn_gateway.h>
+#include <agn_logger.h>
 #include <agn_micros.h>
+#include <agn_packet.h>
 #include <agn_range_finder.h>
 
 /* USER CODE END Includes */
@@ -139,7 +142,8 @@ int main(void)
   resetErrno();
 
   // Initialize Logger Huart
-  AGN_INITIALIZE(&huart2);
+  AGN_LOG_INITIALIZE(&huart2);
+  AGN_GATEWAY_INITIALIZE(&huart3);
 
   /* USER CODE END Init */
 
@@ -176,13 +180,23 @@ int main(void)
 	  //const char * d = "hello\r\n";
 	  //HAL_UART_Transmit(&huart2, d, strlen((char * )d), 1000);
 	  //AGN_LOG_INFO("Logger is working.");
-
-	  char str[100];
 	  AGN_RANGE_TRIGGER();
-	  sprintf(str, "AGN_RANGE = %lu", AGN_RANGE_GET());
-	  AGN_LOG_INFO(str);
 
-	  HAL_Delay(250);
+	  struct AGN_PACKET packet;
+	  packet.magic = 0xA0A0;
+	  packet.depth = AGN_RANGE_GET();
+	  packet.hex1  = 0xA;
+	  packet.hex2  = 0x3;
+
+	  AGN_GATEWAY_SEND_PACKET(&packet);
+
+
+	  // Print Range Information
+	  //char str[100];
+	  //sprintf(str, "AGN_RANGE = %lu", AGN_RANGE_GET());
+	  //AGN_LOG_DEBUG(str);
+
+	  HAL_Delay(125);
   }
   /* USER CODE END 3 */
 
@@ -411,7 +425,7 @@ static void MX_USART3_UART_Init(void)
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;
   huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_RTS_CTS;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart3.Init.OverSampling = UART_OVERSAMPLING_16;
   if (HAL_UART_Init(&huart3) != HAL_OK)
   {
