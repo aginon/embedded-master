@@ -1,5 +1,7 @@
 /.settings/
 /Drivers/
+/startup/
 *.bin
 *.elf
-.mxproject
+/.mxproject
+/mx.scratch
