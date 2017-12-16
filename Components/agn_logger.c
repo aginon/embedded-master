@@ -17,7 +17,7 @@
 
 static UART_HandleTypeDef * _logger_huart;
 
-void AGN_INITIALIZE(UART_HandleTypeDef * logger_huart) {
+void AGN_LOG_INITIALIZE(UART_HandleTypeDef * logger_huart) {
 	_logger_huart = logger_huart;
 }
 

@@ -18,7 +18,7 @@
 #define AGN_LOG_TRACE(x) _AGN_LOG_PROTOTYPE(x, "TRACE")
 
 // Constructor
-void AGN_INITIALIZE(UART_HandleTypeDef * logger_huart);
+void AGN_LOG_INITIALIZE(UART_HandleTypeDef * logger_huart);
 
 // Base (Private)
 void _AGN_LOG_FORMAT(const char * message, const char * level, const char * file, int line);
