@@ -43,7 +43,9 @@ void AGN_RANGE_FALLING() {
 	if (_LAST_EDGE_TIME != 0 && newValue < 700000) {
 
 		// Low Pass Filter
-		_AGN_RANGE = (newValue * 7 + _AGN_RANGE) / 8;
+		//_AGN_RANGE = (newValue * 7 + _AGN_RANGE) / 8;
+
+		_AGN_RANGE = newValue;
 	}
 }
 
