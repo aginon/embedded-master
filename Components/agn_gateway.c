@@ -8,10 +8,11 @@
 
 #include "agn_gateway.h"
 #include "agn_errno.h"
+#include "agn_logger.h"
 
 static UART_HandleTypeDef* _gateway_huart;
 
-#define AGN_GATEWAY_TIMEOUT_MS 1000
+#define AGN_GATEWAY_TIMEOUT_MS 10000
 
 void AGN_GATEWAY_INITIALIZE(UART_HandleTypeDef * gw_huart) {
 	_gateway_huart = gw_huart;
@@ -33,6 +34,7 @@ void AGN_GATEWAY_SEND_PACKET(struct AGN_PACKET* packet) {
 	AGN_GATEWAY_SEND_BYTES(bytes, AGN_PACKET_SIZE);
 }
 
+// NOT Reassured with GATEWAY_RECONNECT
 void AGN_GATEWAY_RECEIVE_BYTES(uint8_t* bytes, uint8_t size) {
 	HAL_StatusTypeDef transmitStatus = HAL_UART_Receive(_gateway_huart, bytes, size, AGN_GATEWAY_TIMEOUT_MS);
 	if (transmitStatus == HAL_ERROR) {
@@ -42,8 +44,49 @@ void AGN_GATEWAY_RECEIVE_BYTES(uint8_t* bytes, uint8_t size) {
 	}
 }
 
+// Reassured with GATEWAY_RECONNECT
 void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet) {
 	uint8_t bytes[AGN_PACKET_SIZE];
 	AGN_GATEWAY_RECEIVE_BYTES(bytes, AGN_PACKET_SIZE);
 	AGN_PACKET_DESERIALIZE(packet, bytes);
+	char str[200];
+	sprintf(str, "Received Bytes: 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6]);
+	AGN_LOG_DEBUG(str);
+
+	while(packet->magic != 0xA0A0) {
+
+		// Move buffer to position after magic
+		AGN_GATEWAY_RECONNECT(bytes);
+
+		// Receive the rest of the bitstream
+		AGN_GATEWAY_RECEIVE_BYTES(bytes + 2, AGN_PACKET_SIZE - 2);
+		AGN_PACKET_DESERIALIZE(packet, bytes);
+	}
+}
+
+/* sets GATEWAY UART buffer to next position after magic
+ * sets the first `bytes` to magic
+ */
+// TODO Support multiple magic
+int AGN_GATEWAY_RECONNECT(uint8_t* bytes) {
+	uint8_t buffer;
+	uint16_t lastByte = 0x0000;
+	AGN_GATEWAY_RECEIVE_BYTES(&buffer, 1);
+	uint8_t timer = 100;
+	lastByte |= (buffer & 0xFF);
+	while(lastByte != 0xA0A0 && timer != 0) {
+		lastByte <<= 8;
+		AGN_GATEWAY_RECEIVE_BYTES(&buffer, 1);
+		lastByte |= (buffer & 0xFF);
+		timer--;
+	}
+
+	// Handle timeout error
+	if (timer == 0) {
+		return 1;
+	} else {
+		bytes[0] = 0xA0;
+		bytes[1] = 0xA0;
+		return 0;
+	}
 }
