@@ -64,6 +64,7 @@ SPI_HandleTypeDef hspi2;
 
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim7;
+TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
@@ -84,6 +85,7 @@ static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_DAC_Init(void);
+static void MX_TIM10_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -102,8 +104,12 @@ void AGN_CHECK_ERRORS() {
 }
 
 int buzzer_state = 0;
+GPIO_PinState gwhb_state = 0;
+const int gwhb_threshold = 5;
+int gwhb_counter = 0;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	//AGN_LOG_DEBUG("TIM_INTERRUPT");
 	if (htim->Instance == TIM7) {
 		// TIM 7 set to 0.1 Hz
 		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
@@ -112,8 +118,30 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		AGN_BUZZER_SET_WAVEFORM(AGN_WAVEFORM_SQ);
 		AGN_BUZZER_SET_FREQ(AGN_TONE_BB4 * 2);
 	} else if (htim->Instance == TIM6){
-		// TIM 6 set to 100kHz
+		// TIM 6 set to 10kHz
+
 		AGN_BUZZER_TICK();
+	} else if (htim->Instance == TIM10) {
+		// TIM 10 set to 1 Hz
+
+		// Toggle Heartbeat OUT
+		HAL_GPIO_TogglePin(GWHB_OUT_GPIO_Port, GWHB_OUT_Pin);
+
+		// Check Heartbeat IN
+		GPIO_PinState new_gwhb_state = HAL_GPIO_ReadPin(GWHB_IN_GPIO_Port, GWHB_IN_Pin);
+		if (gwhb_state != new_gwhb_state) {
+			// Heartbeat is normal
+			gwhb_counter = 0;
+		} else {
+			// Heartbeat is malfunction
+			gwhb_counter++;
+			if (gwhb_counter >= gwhb_threshold) {
+				setErrno(AGN_ERRNO_GATEWAY_HB_ERROR);
+			}
+		}
+
+		gwhb_state = new_gwhb_state;
+
 	} else {
 		UNUSED(htim);
 	}
@@ -121,11 +149,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-	if (GPIO_Pin & RANGE_ECHO_RS_Pin) {
-		AGN_RANGE_RISING();
+/*
+	char str[100];
+	sprintf(str, "EXTI_INTERRUPT: 0x%04x", GPIO_Pin);
+	AGN_LOG_DEBUG(str);
+*/
+
+
+	if (GPIO_Pin & RANGE1_ECHO_RS_Pin) {
+		AGN_RANGE_RISING(1);
 	}
-	if (GPIO_Pin & RANGE_ECHO_FL_Pin) {
-		AGN_RANGE_FALLING();
+	if (GPIO_Pin & RANGE1_ECHO_FL_Pin) {
+		AGN_RANGE_FALLING(1);
+	}
+
+
+	if (GPIO_Pin & RANGE2_ECHO_RS_Pin) {
+		AGN_RANGE_RISING(2);
+	}
+	if (GPIO_Pin & RANGE2_ECHO_FL_Pin) {
+		AGN_RANGE_FALLING(2);
 	}
 }
 
@@ -152,6 +195,7 @@ int main(void)
   AGN_LOG_INITIALIZE(&huart2);
   AGN_GATEWAY_INITIALIZE(&huart3);
   AGN_BUZZER_INITIALIZE(&hdac);
+  AGN_RANGE_INITIALIZE();
 
   /* USER CODE END Init */
 
@@ -172,6 +216,7 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI2_Init();
   MX_DAC_Init();
+  MX_TIM10_Init();
 
   /* USER CODE BEGIN 2 */
 
@@ -181,6 +226,8 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim7);
 
   HAL_DAC_Start(&hdac, DAC_CHANNEL_2);
+
+  struct AGN_PACKET packet;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -192,25 +239,41 @@ int main(void)
   /* USER CODE BEGIN 3 */
 	  //const char * d = "hello\r\n";
 	  //HAL_UART_Transmit(&huart2, d, strlen((char * )d), 1000);
-	  AGN_LOG_INFO("Logger is working.");
-	  AGN_RANGE_TRIGGER();
 
-	  struct AGN_PACKET packet;
 	  packet.magic = 0xA0A0;
-	  packet.depth = AGN_RANGE_GET();
+
+	  char mstr[200];
+	  sprintf(mstr, "Before Trigger: %lu", agnProfile());
+	  AGN_LOG_TRACE(mstr);
+	  AGN_RANGE_TRIGGER(1);
+	  packet.depth1 = AGN_RANGE_GET(1);
+	  AGN_RANGE_TRIGGER(2);
+	  packet.depth2 = AGN_RANGE_GET(2);
+	  sprintf(mstr, "After Trigger: %lu", agnProfile());
+	  AGN_LOG_TRACE(mstr);
+
+	  packet.mode =  0xCC;
+	  packet.status = 0xAABB;
 	  packet.hex1  = 0xA;
 	  packet.hex2  = 0x3;
 
+	  sprintf(mstr, "After Get: %lu", agnProfile());
+	  AGN_LOG_TRACE(mstr);
 	  AGN_GATEWAY_SEND_PACKET(&packet);
 
+	  sprintf(mstr, "After Send: %lu", agnProfile());
+	  AGN_LOG_TRACE(mstr);
+
 	  char rstr[200];
-	  sprintf(rstr, "SENT Packet: mg=0x%04x, dp=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth, packet.hex1, packet.hex2);
+	  sprintf(rstr, "SENT Packet: mg=0x%04x, dp1=%lu, dp2=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth1, packet.depth2, packet.hex1, packet.hex2);
 	  AGN_LOG_DEBUG(rstr);
 
 	  AGN_GATEWAY_RECEIVE_PACKET(&packet);
+	  sprintf(mstr, "After Receive: %lu", agnProfile());
+	  AGN_LOG_TRACE(mstr);
 
 	  char qstr[200];
-	  sprintf(qstr, "RECV Packet: mg=0x%04x, dp=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth, packet.hex1, packet.hex2);
+	  sprintf(qstr, "RECV Packet: mg=0x%04x, dp1=%lu, dp2=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth1, packet.depth2, packet.hex1, packet.hex2);
 	  AGN_LOG_DEBUG(qstr);
 
 	  // Print Range Information
@@ -219,7 +282,7 @@ int main(void)
 	  //AGN_LOG_DEBUG(str);
 
 	  // Delay between measurements needs to be > 60ms
-	  HAL_Delay(125);
+	  HAL_Delay(100);
   }
   /* USER CODE END 3 */
 
@@ -299,7 +362,6 @@ static void MX_DAC_Init(void)
 
     /**DAC channel OUT2 config 
     */
-
   sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_2) != HAL_OK)
@@ -335,7 +397,7 @@ static void MX_I2C1_Init(void)
   hi2c1.Instance = I2C1;
   hi2c1.Init.ClockSpeed = 100000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.OwnAddress1 = 146;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
   hi2c1.Init.OwnAddress2 = 0;
@@ -379,7 +441,7 @@ static void MX_TIM6_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig;
 
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 9;
+  htim6.Init.Prescaler = 99;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 75;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
@@ -414,6 +476,22 @@ static void MX_TIM7_Init(void)
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
+/* TIM10 init function */
+static void MX_TIM10_Init(void)
+{
+
+  htim10.Instance = TIM10;
+  htim10.Init.Prescaler = 30000;
+  htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim10.Init.Period = 20000;
+  htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -484,31 +562,34 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|BUZZER_IO_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|GWHB_OUT_Pin|BUZZER_IO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(OTG_FS_PowerSwitchOn_GPIO_Port, OTG_FS_PowerSwitchOn_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(RANGE_TRIG_GPIO_Port, RANGE_TRIG_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(RANGE1_TRIG_GPIO_Port, RANGE1_TRIG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, LD4_Pin|LD3_Pin|LD5_Pin|LD6_Pin 
                           |Audio_RST_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : CS_I2C_SPI_Pin BUZZER_IO_Pin */
-  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|BUZZER_IO_Pin;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(RANGE2_TRIG_GPIO_Port, RANGE2_TRIG_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : CS_I2C_SPI_Pin GWHB_OUT_Pin BUZZER_IO_Pin */
+  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|GWHB_OUT_Pin|BUZZER_IO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : OTG_FS_PowerSwitchOn_Pin */
-  GPIO_InitStruct.Pin = OTG_FS_PowerSwitchOn_Pin;
+  /*Configure GPIO pins : OTG_FS_PowerSwitchOn_Pin RANGE2_TRIG_Pin */
+  GPIO_InitStruct.Pin = OTG_FS_PowerSwitchOn_Pin|RANGE2_TRIG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(OTG_FS_PowerSwitchOn_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PDM_OUT_Pin */
   GPIO_InitStruct.Pin = PDM_OUT_Pin;
@@ -524,18 +605,24 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : RANGE_TRIG_Pin */
-  GPIO_InitStruct.Pin = RANGE_TRIG_Pin;
+  /*Configure GPIO pin : RANGE1_TRIG_Pin */
+  GPIO_InitStruct.Pin = RANGE1_TRIG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(RANGE_TRIG_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(RANGE1_TRIG_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BOOT1_Pin */
   GPIO_InitStruct.Pin = BOOT1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BOOT1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : GWHB_IN_Pin */
+  GPIO_InitStruct.Pin = GWHB_IN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GWHB_IN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin LD5_Pin LD6_Pin 
                            Audio_RST_Pin */
@@ -562,23 +649,35 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : RANGE2_ECHO_FL_Pin */
+  GPIO_InitStruct.Pin = RANGE2_ECHO_FL_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(RANGE2_ECHO_FL_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : RANGE2_ECHO_RS_Pin */
+  GPIO_InitStruct.Pin = RANGE2_ECHO_RS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(RANGE2_ECHO_RS_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : OTG_FS_OverCurrent_Pin */
   GPIO_InitStruct.Pin = OTG_FS_OverCurrent_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(OTG_FS_OverCurrent_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : RANGE_ECHO_RS_Pin */
-  GPIO_InitStruct.Pin = RANGE_ECHO_RS_Pin;
+  /*Configure GPIO pin : RANGE1_ECHO_RS_Pin */
+  GPIO_InitStruct.Pin = RANGE1_ECHO_RS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(RANGE_ECHO_RS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(RANGE1_ECHO_RS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : RANGE_ECHO_FL_Pin */
-  GPIO_InitStruct.Pin = RANGE_ECHO_FL_Pin;
+  /*Configure GPIO pin : RANGE1_ECHO_FL_Pin */
+  GPIO_InitStruct.Pin = RANGE1_ECHO_FL_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(RANGE_ECHO_FL_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(RANGE1_ECHO_FL_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : MEMS_INT2_Pin */
   GPIO_InitStruct.Pin = MEMS_INT2_Pin;
@@ -587,11 +686,17 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(MEMS_INT2_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 

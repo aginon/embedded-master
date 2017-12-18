@@ -100,9 +100,9 @@ void _AGN_BUZZER_HANDLE_TRI() {
 
 	// Handle VPOS for TRI waveform
 	if (agn_buzzer_state == 0) {
-		_agn_buzzer_vpos += 0x0100;
+		_agn_buzzer_vpos += 0x0200;
 	} else if (agn_buzzer_state == 1) {
-		_agn_buzzer_vpos -= 0x0100;
+		_agn_buzzer_vpos -= 0x0200;
 	}
 
 	// Next state logic
@@ -140,11 +140,11 @@ void AGN_BUZZER_SET_FREQ(double freq) {
 	agn_buzzer_freq = (uint32_t) freq;
 	// if freq > 100000 or freq == 0, do nothing
 	if (agn_buzzer_waveform == AGN_WAVEFORM_TRI) {
-		freq *= 16;
+		freq *= 8;
 	}
-	if (freq < 100000 && freq > 0) {
+	if (freq < 10000 && freq > 0) {
 		// set period (100000 = 100kHz)
-		agn_buzzer_period = 100000 / freq;
+		agn_buzzer_period = 10000 / freq;
 		agn_buzzer_counter = 0;
 		agn_buzzer_state = 0;
 		_agn_buzzer_vpos = 0x0000;

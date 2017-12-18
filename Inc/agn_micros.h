@@ -12,4 +12,6 @@
 
 uint32_t agnMicros();
 
+uint32_t agnProfile();
+
 #endif /* AGN_MICROS_H_ */
