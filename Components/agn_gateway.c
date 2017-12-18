@@ -56,7 +56,7 @@ void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet) {
 	while(packet->magic != 0xA0A0) {
 
 		// Move buffer to position after magic
-		AGN_GATEWAY_RECONNECT(bytes);
+		AGN_GATEWAY_RESYNC(bytes);
 
 		// Receive the rest of the bitstream
 		AGN_GATEWAY_RECEIVE_BYTES(bytes + 2, AGN_PACKET_SIZE - 2);
@@ -68,7 +68,7 @@ void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet) {
  * sets the first `bytes` to magic
  */
 // TODO Support multiple magic
-int AGN_GATEWAY_RECONNECT(uint8_t* bytes) {
+int AGN_GATEWAY_RESYNC(uint8_t* bytes) {
 	uint8_t buffer;
 	uint16_t lastByte = 0x0000;
 	AGN_GATEWAY_RECEIVE_BYTES(&buffer, 1);
