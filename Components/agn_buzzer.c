@@ -52,10 +52,10 @@ void AGN_BUZZER_TICK() {
 		agn_buzzer_counter = 0;
 		switch (agn_buzzer_waveform) {
 		case AGN_WAVEFORM_SQ:
-			AGN_BUZZER_HANDLE_SQ();
+			_AGN_BUZZER_HANDLE_SQ();
 			break;
 		case AGN_WAVEFORM_TRI:
-			AGN_BUZZER_HANDLE_TRI();
+			_AGN_BUZZER_HANDLE_TRI();
 			break;
 		default:
 			setErrno(AGN_ERRNO_BUZZER_INVALID_WAVE);
@@ -64,7 +64,7 @@ void AGN_BUZZER_TICK() {
 	}
 }
 
-void AGN_BUZZER_HANDLE_SQ() {
+void _AGN_BUZZER_HANDLE_SQ() {
 	if (agn_buzzer_state == 0) {
 		HAL_DAC_SetValue(buzzer_hdac, DAC_CHANNEL_2, DAC_ALIGN_12B_R, _agn_buzzer_vpos);
 		HAL_GPIO_WritePin(BUZZER_IO_GPIO_Port, BUZZER_IO_Pin, GPIO_PIN_RESET);
@@ -87,7 +87,7 @@ void AGN_BUZZER_HANDLE_SQ() {
 	}
 }
 
-void AGN_BUZZER_HANDLE_TRI() {
+void _AGN_BUZZER_HANDLE_TRI() {
 
 	// Output logic
 	if (agn_buzzer_state == 0) {

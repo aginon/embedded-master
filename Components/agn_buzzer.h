@@ -13,7 +13,6 @@
 #define AGN_BUZZER_ON 0
 #define AGN_BUZZER_OFF 1
 
-
 // Tone values are doubled
 #define AGN_TONE_C4 	523.25
 #define AGN_TONE_DB4 	554.37
@@ -35,14 +34,13 @@ void AGN_BUZZER_INITIALIZE(DAC_HandleTypeDef *_buzzer_hdac);
 
 // Called by the interrupt
 void AGN_BUZZER_TICK();
-void AGN_BUZZER_HANDLE_SQ();
-void AGN_BUZZER_HANDLE_TRI();
+void _AGN_BUZZER_HANDLE_SQ();
+void _AGN_BUZZER_HANDLE_TRI();
 
 void AGN_BUZZER_SET_WAVEFORM(uint8_t waveform);
 void AGN_BUZZER_SET_FREQ(double freq);
 
 void AGN_BUZZER_SET_SWTICH(uint8_t val);
-
 void AGN_BUZZER_TOGGLE_SWTICH();
 
 #endif /* AGN_BUZZER_H_ */
