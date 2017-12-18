@@ -96,7 +96,7 @@ static void MX_DAC_Init(void);
 void AGN_CHECK_ERRORS() {
 	if (getErrno() != 0) {
 		char s[20];
-		sprintf(s, "Error Code = %d", getErrno());
+		sprintf(s, "Error Code = 0x%02x", getErrno());
 		AGN_LOG_ERROR(s);
 	}
 }
@@ -192,7 +192,7 @@ int main(void)
   /* USER CODE BEGIN 3 */
 	  //const char * d = "hello\r\n";
 	  //HAL_UART_Transmit(&huart2, d, strlen((char * )d), 1000);
-	  //AGN_LOG_INFO("Logger is working.");
+	  AGN_LOG_INFO("Logger is working.");
 	  AGN_RANGE_TRIGGER();
 
 	  struct AGN_PACKET packet;
@@ -202,11 +202,23 @@ int main(void)
 	  packet.hex2  = 0x3;
 
 	  AGN_GATEWAY_SEND_PACKET(&packet);
+
+	  char rstr[200];
+	  sprintf(rstr, "SENT Packet: mg=0x%04x, dp=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth, packet.hex1, packet.hex2);
+	  AGN_LOG_DEBUG(rstr);
+
+	  AGN_GATEWAY_RECEIVE_PACKET(&packet);
+
+	  char qstr[200];
+	  sprintf(qstr, "RECV Packet: mg=0x%04x, dp=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth, packet.hex1, packet.hex2);
+	  AGN_LOG_DEBUG(qstr);
+
 	  // Print Range Information
 	  //char str[100];
 	  //sprintf(str, "AGN_RANGE = %lu", AGN_RANGE_GET());
 	  //AGN_LOG_DEBUG(str);
 
+	  // Delay between measurements needs to be > 60ms
 	  HAL_Delay(125);
   }
   /* USER CODE END 3 */
