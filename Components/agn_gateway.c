@@ -49,7 +49,6 @@ void AGN_GATEWAY_RECEIVE_BYTES(uint8_t* bytes, uint8_t size) {
 	} else if (transmitStatus == HAL_TIMEOUT) {
 		setErrno(AGN_ERRNO_GATEWAY_RECV_TIMEOUT);
 	}
-
 #ifdef AGN_DEBUG
 	char str[200];
 	char header[30] = "Received Internal:";
@@ -74,6 +73,20 @@ void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet) {
 		// get synced bytes
 		AGN_GATEWAY_RESYNC(bytes, AGN_PACKET_SIZE);
 
+		// Receive the rest of the bitstream
+		AGN_GATEWAY_RECEIVE_BYTES(bytes, AGN_PACKET_SIZE);
+#ifdef AGN_DEBUG
+		char str[200];
+		char header[30] = "Received bytes:";
+		sprintf(str, "%s", header);
+		char * a = str + strlen(header);
+		for (int i = 0; i < AGN_PACKET_SIZE; i++) {
+			sprintf(a, " %02x", bytes[i]);
+			a += 3;
+		}
+		AGN_LOG_DEBUG(str);
+#endif
+
 		AGN_PACKET_DESERIALIZE(packet, bytes);
 	}
 }
@@ -97,10 +110,6 @@ int AGN_GATEWAY_RESYNC(uint8_t* bytes, uint8_t size) {
 
 	bytes[0] = 0xA0;
 	bytes[1] = 0xA0;
-
-	// Receive the rest of the bitstream
-	// (** for some bizzare reason, the already read magic bytes are still read again!)
-	AGN_GATEWAY_RECEIVE_BYTES(bytes, AGN_PACKET_SIZE);
 
 	AGN_LOG_DEBUG("GATEWAY_RESYNC");
 
