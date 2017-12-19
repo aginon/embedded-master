@@ -43,4 +43,6 @@ void AGN_BUZZER_SET_FREQ(double freq);
 void AGN_BUZZER_SET_SWTICH(uint8_t val);
 void AGN_BUZZER_TOGGLE_SWTICH();
 
+uint8_t AGN_BUZZER_GET_SWTICH();
+
 #endif /* AGN_BUZZER_H_ */

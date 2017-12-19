@@ -44,6 +44,7 @@ void AGN_BUZZER_INITIALIZE(DAC_HandleTypeDef *_buzzer_hdac) {
 void AGN_BUZZER_TICK() {
 	// Do nothing if BUZZER is off
 	if (agn_buzzer_switch == AGN_BUZZER_OFF) {
+		HAL_DAC_SetValue(buzzer_hdac, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0);
 		return;
 	}
 
@@ -153,5 +154,8 @@ void AGN_BUZZER_SET_FREQ(double freq) {
 	}
 }
 
+uint8_t AGN_BUZZER_GET_SWTICH() {
+	return agn_buzzer_switch;
+}
 
 
