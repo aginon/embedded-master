@@ -60,11 +60,11 @@ void AGN_RANGE_FALLING(uint8_t channel) {
 		//_AGN_RANGE = newValue;
 		_AGN_RANGE_AVAILABLE[channel] = 1;
 	}
-
+/*
 	char str[100];
 	sprintf(str, "LAST_EDGE_TIMES[%lu, %lu, %lu, %lu]", _LAST_EDGE_TIME[0], _LAST_EDGE_TIME[1], _LAST_EDGE_TIME[2], _LAST_EDGE_TIME[3]);
 	AGN_LOG_INFO(str);
-
+*/
 }
 
 void AGN_RANGE_TRIGGER(uint8_t channel) {
@@ -113,4 +113,13 @@ void AGN_RANGE_TRIGGER(uint8_t channel) {
 uint32_t AGN_RANGE_GET(uint8_t channel) {
 	_AGN_RANGE_AVAILABLE[channel] = 0;
 	return _AGN_RANGE[channel];
+}
+
+uint8_t AGN_RANGE_IS_CONNECTED(uint8_t channel) {
+	// If responseless for >= 5 seconds, then it is disconnected
+	if (agnMicros() - _LAST_EDGE_TIME[channel] >= 5000000) {
+		return 0;
+	} else {
+		return 1;
+	}
 }

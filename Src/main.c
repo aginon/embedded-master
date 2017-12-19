@@ -105,24 +105,22 @@ void AGN_CHECK_ERRORS() {
 
 int buzzer_state = 0;
 GPIO_PinState gwhb_state = 0;
-const int gwhb_threshold = 5;
+const int gwhb_threshold = 3;
 int gwhb_counter = 0;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	//AGN_LOG_DEBUG("TIM_INTERRUPT");
 	if (htim->Instance == TIM7) {
-		// TIM 7 set to 0.1 Hz
+		// TIM 7 set to 10 Hz
 		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
 		AGN_CHECK_ERRORS();
 
-		AGN_BUZZER_SET_WAVEFORM(AGN_WAVEFORM_SQ);
-		AGN_BUZZER_SET_FREQ(AGN_TONE_BB4 * 2);
 	} else if (htim->Instance == TIM6){
 		// TIM 6 set to 10kHz
 
 		AGN_BUZZER_TICK();
 	} else if (htim->Instance == TIM10) {
-		// TIM 10 set to 1 Hz
+		// TIM 10 set to 0.2 Hz
 
 		// Toggle Heartbeat OUT
 		HAL_GPIO_TogglePin(GWHB_OUT_GPIO_Port, GWHB_OUT_Pin);
@@ -133,7 +131,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			// Heartbeat is normal
 			gwhb_counter = 0;
 		} else {
-			// Heartbeat is malfunction
+			// Heartbeat is malfunctioning
 			gwhb_counter++;
 			if (gwhb_counter >= gwhb_threshold) {
 				setErrno(AGN_ERRNO_GATEWAY_HB_ERROR);
@@ -189,13 +187,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  resetErrno();
-
-  // Initialize Logger Huart
-  AGN_LOG_INITIALIZE(&huart2);
-  AGN_GATEWAY_INITIALIZE(&huart3);
-  AGN_BUZZER_INITIALIZE(&hdac);
-  AGN_RANGE_INITIALIZE();
 
   /* USER CODE END Init */
 
@@ -220,12 +211,28 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 
+  resetErrno();
+
+  // Initialize Logger Huart
+  AGN_LOG_INITIALIZE(&huart2);
+  AGN_GATEWAY_INITIALIZE(&huart3);
+  AGN_BUZZER_INITIALIZE(&hdac);
+  AGN_RANGE_INITIALIZE();
+
+
+
   // Start Timer Interrupts
   // TODO Check for errors at this stage
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim7);
+  HAL_TIM_Base_Start_IT(&htim10);
 
+  // Start Digital-Analog Converter
   HAL_DAC_Start(&hdac, DAC_CHANNEL_2);
+
+  // Set Beep Sound
+  AGN_BUZZER_SET_WAVEFORM(AGN_WAVEFORM_SQ);
+  AGN_BUZZER_SET_FREQ(AGN_TONE_BB4 * 2);
 
   struct AGN_PACKET packet;
   /* USER CODE END 2 */
@@ -240,6 +247,16 @@ int main(void)
 	  //const char * d = "hello\r\n";
 	  //HAL_UART_Transmit(&huart2, d, strlen((char * )d), 1000);
 
+
+	  if (getErrno() == AGN_ERRNO_GATEWAY_RECV_TIMEOUT) {
+		  uint8_t dummy_bytes[AGN_PACKET_SIZE];
+		  int connection = AGN_GATEWAY_RESYNC(dummy_bytes, AGN_PACKET_SIZE);
+		  if (connection == 0) {
+			  resetErrno();
+		  }
+	  }
+
+
 	  packet.magic = 0xA0A0;
 
 	  char mstr[200];
@@ -252,8 +269,11 @@ int main(void)
 	  sprintf(mstr, "After Trigger: %lu", agnProfile());
 	  AGN_LOG_TRACE(mstr);
 
-	  packet.mode =  0xCC;
-	  packet.status = 0xAABB;
+	  packet.status &= 0xF000;
+	  packet.status |= (getErrno() & 0xFF);
+	  packet.status |= (AGN_RANGE_IS_CONNECTED(2) << 8);
+	  packet.status |= (AGN_RANGE_IS_CONNECTED(1) << 9);
+	  packet.status |= (1 << 10);
 	  packet.hex1  = 0xA;
 	  packet.hex2  = 0x3;
 
@@ -265,8 +285,10 @@ int main(void)
 	  AGN_LOG_TRACE(mstr);
 
 	  char rstr[200];
-	  sprintf(rstr, "SENT Packet: mg=0x%04x, dp1=%lu, dp2=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth1, packet.depth2, packet.hex1, packet.hex2);
+	  sprintf(rstr, "SENT Packet: mg=0x%04x, dp1=%lu, dp2=%lu, hx1=0x%01x, hx2=0x%01x, ic1=%d",
+			  packet.magic, packet.depth1, packet.depth2, packet.hex1, packet.hex2, AGN_RANGE_IS_CONNECTED(1));
 	  AGN_LOG_DEBUG(rstr);
+
 
 	  AGN_GATEWAY_RECEIVE_PACKET(&packet);
 	  sprintf(mstr, "After Receive: %lu", agnProfile());
@@ -275,6 +297,20 @@ int main(void)
 	  char qstr[200];
 	  sprintf(qstr, "RECV Packet: mg=0x%04x, dp1=%lu, dp2=%lu, hx1=0x%01x, hx2 = 0x%01x", packet.magic, packet.depth1, packet.depth2, packet.hex1, packet.hex2);
 	  AGN_LOG_DEBUG(qstr);
+
+	  // Handle Received Commands
+
+	  if ((packet.mode == 0x01) && (AGN_BUZZER_GET_SWTICH() == AGN_BUZZER_OFF)) {
+		  // On command 'ON'
+		  AGN_LOG_DEBUG("SET ON");
+		  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_ON);
+	  } else if ((packet.mode  == 0x00) && (AGN_BUZZER_GET_SWTICH() == AGN_BUZZER_ON)) {
+		  // On command 'OFF'
+		  AGN_LOG_DEBUG("SET OFF");
+		  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_OFF);
+	  } else {
+		  AGN_LOG_DEBUG("DID NOTHING");
+	  }
 
 	  // Print Range Information
 	  //char str[100];
@@ -487,9 +523,9 @@ static void MX_TIM10_Init(void)
 {
 
   htim10.Instance = TIM10;
-  htim10.Init.Prescaler = 30000;
+  htim10.Init.Prescaler = 15000;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 20000;
+  htim10.Init.Period = 50000;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
   {
@@ -568,11 +604,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(OTG_FS_PowerSwitchOn_GPIO_Port, OTG_FS_PowerSwitchOn_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(RANGE1_TRIG_GPIO_Port, RANGE1_TRIG_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, LD4_Pin|LD3_Pin|LD5_Pin|LD6_Pin 
-                          |Audio_RST_Pin, GPIO_PIN_RESET);
+                          |Audio_RST_Pin|RANGE1_TRIG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(RANGE2_TRIG_GPIO_Port, RANGE2_TRIG_Pin, GPIO_PIN_RESET);
@@ -605,13 +638,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : RANGE1_TRIG_Pin */
-  GPIO_InitStruct.Pin = RANGE1_TRIG_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(RANGE1_TRIG_GPIO_Port, &GPIO_InitStruct);
-
   /*Configure GPIO pin : BOOT1_Pin */
   GPIO_InitStruct.Pin = BOOT1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -625,9 +651,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GWHB_IN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD4_Pin LD3_Pin LD5_Pin LD6_Pin 
-                           Audio_RST_Pin */
+                           Audio_RST_Pin RANGE1_TRIG_Pin */
   GPIO_InitStruct.Pin = LD4_Pin|LD3_Pin|LD5_Pin|LD6_Pin 
-                          |Audio_RST_Pin;
+                          |Audio_RST_Pin|RANGE1_TRIG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

@@ -26,4 +26,6 @@ void AGN_RANGE_TRIGGER(uint8_t channel);
 /* Get Range Value */
 uint32_t AGN_RANGE_GET(uint8_t channel);
 
+/* Check Connection */
+uint8_t AGN_RANGE_IS_CONNECTED(uint8_t channel) ;
 #endif /* AGN_RANGE_FINDER_H_ */
