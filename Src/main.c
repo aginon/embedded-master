@@ -100,6 +100,7 @@ void AGN_CHECK_ERRORS() {
 		char s[20];
 		sprintf(s, "Error Code = 0x%02x", getErrno());
 		AGN_LOG_ERROR(s);
+		resetErrno();
 	}
 }
 
@@ -152,8 +153,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	sprintf(str, "EXTI_INTERRUPT: 0x%04x", GPIO_Pin);
 	AGN_LOG_DEBUG(str);
 */
-
-
 	if (GPIO_Pin & RANGE1_ECHO_RS_Pin) {
 		AGN_RANGE_RISING(1);
 	}
@@ -168,6 +167,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	if (GPIO_Pin & RANGE2_ECHO_FL_Pin) {
 		AGN_RANGE_FALLING(2);
 	}
+}
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+
 }
 
 /* USER CODE END 0 */
@@ -219,8 +223,6 @@ int main(void)
   AGN_BUZZER_INITIALIZE(&hdac);
   AGN_RANGE_INITIALIZE();
 
-
-
   // Start Timer Interrupts
   // TODO Check for errors at this stage
   HAL_TIM_Base_Start_IT(&htim6);
@@ -233,6 +235,10 @@ int main(void)
   // Set Beep Sound
   AGN_BUZZER_SET_WAVEFORM(AGN_WAVEFORM_SQ);
   AGN_BUZZER_SET_FREQ(AGN_TONE_BB4 * 2);
+
+  // Calibrate Rangefinders
+  AGN_RANGE_SET_A(10, 1);
+  AGN_RANGE_SET_A(10, 2);
 
   struct AGN_PACKET packet;
   /* USER CODE END 2 */
@@ -247,7 +253,6 @@ int main(void)
 	  //const char * d = "hello\r\n";
 	  //HAL_UART_Transmit(&huart2, d, strlen((char * )d), 1000);
 
-
 	  if (getErrno() == AGN_ERRNO_GATEWAY_RECV_TIMEOUT) {
 		  uint8_t dummy_bytes[AGN_PACKET_SIZE];
 		  int connection = AGN_GATEWAY_RESYNC(dummy_bytes, AGN_PACKET_SIZE);
@@ -256,16 +261,24 @@ int main(void)
 		  }
 	  }
 
-
 	  packet.magic = 0xA0A0;
 
 	  char mstr[200];
 	  sprintf(mstr, "Before Trigger: %lu", agnProfile());
 	  AGN_LOG_TRACE(mstr);
-	  AGN_RANGE_TRIGGER(1);
-	  packet.depth1 = AGN_RANGE_GET(1);
-	  AGN_RANGE_TRIGGER(2);
-	  packet.depth2 = AGN_RANGE_GET(2);
+	  uint32_t _depth_1_sum = 0, _depth_2_sum = 0;
+	  for (int i = 0; i < 8; i++) {
+		  AGN_RANGE_TRIGGER(1);
+		  _depth_1_sum += AGN_RANGE_GET(1);
+		  AGN_RANGE_TRIGGER(2);
+		  _depth_2_sum += AGN_RANGE_GET(2);
+		  HAL_Delay(60);
+	  }
+	  packet.depth1 = _depth_1_sum / 8;
+	  packet.depth2 = _depth_2_sum / 8;
+
+	  uint8_t isDetectThief = (packet.depth1 + packet.depth2) < 540000;
+
 	  sprintf(mstr, "After Trigger: %lu", agnProfile());
 	  AGN_LOG_TRACE(mstr);
 
@@ -274,7 +287,10 @@ int main(void)
 	  packet.status |= (AGN_RANGE_IS_CONNECTED(2) << 8);
 	  packet.status |= (AGN_RANGE_IS_CONNECTED(1) << 9);
 	  packet.status |= (1 << 10);
-	  packet.hex1  = 0xA;
+	  packet.detection = 0x00;
+	  packet.detection |= (packet.depth1 < 270000) << 3;
+	  packet.detection |= (packet.depth2 < 270000) << 2;
+	  packet.hex1  = 0x00 | (isDetectThief & 0x01);
 	  packet.hex2  = 0x3;
 
 	  sprintf(mstr, "After Get: %lu", agnProfile());
@@ -300,16 +316,24 @@ int main(void)
 
 	  // Handle Received Commands
 
-	  if ((packet.mode == 0x01) && (AGN_BUZZER_GET_SWTICH() == AGN_BUZZER_OFF)) {
+	  if ((packet.mode == 0x01)) {
 		  // On command 'ON'
 		  AGN_LOG_DEBUG("SET ON");
 		  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_ON);
-	  } else if ((packet.mode  == 0x00) && (AGN_BUZZER_GET_SWTICH() == AGN_BUZZER_ON)) {
+	  } else if ((packet.mode  == 0x00)) {
 		  // On command 'OFF'
 		  AGN_LOG_DEBUG("SET OFF");
 		  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_OFF);
-	  } else {
-		  AGN_LOG_DEBUG("DID NOTHING");
+	  } else if ((packet.mode == 0x02)) {
+		  AGN_LOG_DEBUG("ENABLE");
+		  if (isDetectThief) {
+			  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_ON);
+ 		  } else {
+ 			  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_OFF);
+ 		  }
+	  } else if ((packet.mode == 0x03)) {
+		  AGN_LOG_DEBUG("DISABLE");
+		  AGN_BUZZER_SET_SWTICH(AGN_BUZZER_OFF);
 	  }
 
 	  // Print Range Information

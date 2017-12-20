@@ -21,7 +21,7 @@
 #define AGN_MAX_RANGE_COMPONENTS 16
 
 // Calibration Factors (Y = ax + b)
-static uint32_t agn_range_a = 100, agn_range_b = 100;
+static int32_t agn_range_a[AGN_MAX_RANGE_COMPONENTS], agn_range_b[AGN_MAX_RANGE_COMPONENTS];
 
 static uint32_t _AGN_RANGE[AGN_MAX_RANGE_COMPONENTS];
 static uint32_t _LAST_EDGE_TIME[AGN_MAX_RANGE_COMPONENTS];
@@ -32,15 +32,17 @@ void AGN_RANGE_INITIALIZE() {
 		_AGN_RANGE[i] = 0;
 		_LAST_EDGE_TIME[i] = 0;
 		_AGN_RANGE_AVAILABLE[i] = 0;
+		agn_range_a[i] = 1;
+		agn_range_b[i] = 0;
 	}
 }
 
-void AGN_RANGE_SET_A(uint32_t a) {
-	agn_range_a = a;
+void AGN_RANGE_SET_A(int32_t a, uint8_t channel) {
+	agn_range_a[channel] = a;
 }
 
-void AGN_RANGE_SET_B(uint32_t b) {
-	agn_range_b = b;
+void AGN_RANGE_SET_B(int32_t b, uint8_t channel) {
+	agn_range_b[channel] = b;
 }
 
 void AGN_RANGE_RISING(uint8_t channel) {
@@ -112,7 +114,7 @@ void AGN_RANGE_TRIGGER(uint8_t channel) {
 
 uint32_t AGN_RANGE_GET(uint8_t channel) {
 	_AGN_RANGE_AVAILABLE[channel] = 0;
-	return _AGN_RANGE[channel];
+	return _AGN_RANGE[channel] * agn_range_a[channel] + agn_range_b[channel];
 }
 
 uint8_t AGN_RANGE_IS_CONNECTED(uint8_t channel) {

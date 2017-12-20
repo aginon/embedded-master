@@ -13,8 +13,8 @@
 void AGN_RANGE_INITIALIZE();
 
 /* Calibration */
-void AGN_RANGE_SET_A(uint32_t a);
-void AGN_RANGE_SET_B(uint32_t b);
+void AGN_RANGE_SET_A(int32_t a, uint8_t channel);
+void AGN_RANGE_SET_B(int32_t a, uint8_t channel);
 
 /* On Pin Change Interrupt */
 void AGN_RANGE_RISING(uint8_t channel);

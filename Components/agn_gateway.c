@@ -43,6 +43,7 @@ void AGN_GATEWAY_SEND_PACKET(struct AGN_PACKET* packet) {
 
 // NOT Reassured with GATEWAY_RECONNECT
 void AGN_GATEWAY_RECEIVE_BYTES(uint8_t* bytes, uint8_t size) {
+	//HAL_UART_Receive_IT(_gateway_huart, bytes, size);
 	HAL_StatusTypeDef transmitStatus = HAL_UART_Receive(_gateway_huart, bytes, size, AGN_GATEWAY_TIMEOUT_MS);
 	if (transmitStatus == HAL_ERROR) {
 		setErrno(AGN_ERRNO_GATEWAY_RECV_ERROR);
@@ -74,8 +75,7 @@ void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet) {
 		AGN_GATEWAY_RESYNC(bytes, AGN_PACKET_SIZE);
 
 		// Receive the rest of the bitstream
-		AGN_GATEWAY_RECEIVE_BYTES(bytes, AGN_PACKET_SIZE);
-#ifdef AGN_DEBUG
+		AGN_GATEWAY_RECEIVE_BYTES(bytes + 2, AGN_PACKET_SIZE - 2);
 		char str[200];
 		char header[30] = "Received bytes:";
 		sprintf(str, "%s", header);
@@ -85,7 +85,7 @@ void AGN_GATEWAY_RECEIVE_PACKET(struct AGN_PACKET* packet) {
 			a += 3;
 		}
 		AGN_LOG_DEBUG(str);
-#endif
+
 
 		AGN_PACKET_DESERIALIZE(packet, bytes);
 	}
@@ -112,6 +112,17 @@ int AGN_GATEWAY_RESYNC(uint8_t* bytes, uint8_t size) {
 	bytes[1] = 0xA0;
 
 	AGN_LOG_DEBUG("GATEWAY_RESYNC");
+
+
+	char str[200];
+	char header[30] = "Received bytes:";
+	sprintf(str, "%s", header);
+	char * a = str + strlen(header);
+	for (int i = 0; i < AGN_PACKET_SIZE; i++) {
+		sprintf(a, " %02x", bytes[i]);
+		a += 3;
+	}
+	AGN_LOG_DEBUG(str);
 
 	// Handle timeout error
 	if (timer == 0) {
